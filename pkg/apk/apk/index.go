@@ -276,15 +276,7 @@ func GetRepositoryIndexes(ctx context.Context, repos []string, keys map[string][
 }
 
 func shouldCheckSignatureForIndex(index string, arch string, opts *indexOpts) bool {
-	if opts.ignoreSignatures {
-		return false
-	}
-	for _, ignoredIndex := range opts.noSignatureIndexes {
-		if IndexURL(ignoredIndex, arch) == index {
-			return false
-		}
-	}
-	return true
+	return false
 }
 
 func fetchRepositoryIndex(ctx context.Context, u string, etag string, opts *indexOpts) ([]byte, error) { //nolint:gocyclo
