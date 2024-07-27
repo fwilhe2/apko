@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"chainguard.dev/apko/pkg/apk/auth"
 	"chainguard.dev/apko/pkg/build/types"
-	"chainguard.dev/apko/pkg/options"
 
 	"github.com/chainguard-dev/clog"
 )
@@ -66,17 +66,6 @@ func WithTags(tags ...string) Option {
 func WithTarball(path string) Option {
 	return func(bc *Context) error {
 		bc.o.TarballPath = path
-		return nil
-	}
-}
-
-// WithAssertions adds assertions to validate the result
-// of this build context.
-// Assertions are checked in parallel at the end of the
-// build process.
-func WithAssertions(a ...Assertion) Option {
-	return func(bc *Context) error {
-		bc.assertions = append(bc.assertions, a...)
 		return nil
 	}
 }
@@ -223,12 +212,18 @@ func WithTempDir(tmp string) Option {
 	}
 }
 
-func WithAuth(domain, user, pass string) Option {
+func WithAuthenticator(a auth.Authenticator) Option {
 	return func(bc *Context) error {
-		if bc.o.Auth == nil {
-			bc.o.Auth = make(map[string]options.Auth)
-		}
-		bc.o.Auth[domain] = options.Auth{User: user, Pass: pass}
+		bc.o.Auth = a
+		return nil
+	}
+}
+
+// WithIgnoreSignatures sets whether to ignore repository signature verification.
+// Default is false.
+func WithIgnoreSignatures(ignore bool) Option {
+	return func(bc *Context) error {
+		bc.o.IgnoreSignatures = ignore
 		return nil
 	}
 }

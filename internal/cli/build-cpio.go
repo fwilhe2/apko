@@ -27,28 +27,27 @@ import (
 	apkfs "chainguard.dev/apko/pkg/apk/fs"
 	"chainguard.dev/apko/pkg/build"
 	"chainguard.dev/apko/pkg/build/types"
+	"chainguard.dev/apko/pkg/cpio"
 )
 
-func buildMinirootFS() *cobra.Command {
+func buildCPIO() *cobra.Command {
 	var buildDate string
 	var buildArch string
 	var sbomPath string
-	var ignoreSignatures bool
 
 	cmd := &cobra.Command{
-		Use:     "build-minirootfs",
-		Short:   "Build a minirootfs image from a YAML configuration file",
-		Long:    "Build a minirootfs image from a YAML configuration file",
-		Example: `  apko build-minirootfs <config.yaml> <output.tar.gz>`,
+		Use:     "build-cpio",
+		Short:   "Build a cpio file from a YAML configuration file",
+		Long:    "Build a cpio file from a YAML configuration file",
+		Example: `  apko build-cpio <config.yaml> <output.cpio>`,
+		Hidden:  true,
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return BuildMinirootFSCmd(cmd.Context(),
+			return BuildCPIOCmd(cmd.Context(), args[1],
 				build.WithConfig(args[0], []string{}),
-				build.WithTarball(args[1]),
 				build.WithBuildDate(buildDate),
 				build.WithSBOM(sbomPath),
 				build.WithArch(types.ParseArchitecture(buildArch)),
-				build.WithIgnoreSignatures(ignoreSignatures),
 			)
 		},
 	}
@@ -56,12 +55,11 @@ func buildMinirootFS() *cobra.Command {
 	cmd.Flags().StringVar(&buildDate, "build-date", "", "date used for the timestamps of the files inside the image")
 	cmd.Flags().StringVar(&buildArch, "build-arch", runtime.GOARCH, "architecture to build for -- default is Go runtime architecture")
 	cmd.Flags().StringVar(&sbomPath, "sbom-path", "", "generate an SBOM")
-	cmd.Flags().BoolVar(&ignoreSignatures, "ignore-signatures", false, "ignore repository signature verification")
 
 	return cmd
 }
 
-func BuildMinirootFSCmd(ctx context.Context, opts ...build.Option) error {
+func BuildCPIOCmd(ctx context.Context, dest string, opts ...build.Option) error {
 	log := clog.FromContext(ctx)
 	wd, err := os.MkdirTemp("", "apko-*")
 	if err != nil {
@@ -81,12 +79,22 @@ func BuildMinirootFSCmd(ctx context.Context, opts ...build.Option) error {
 		log.Warnf("ignoring archs in config, only building for current arch (%s)", bc.Arch())
 	}
 
-	log.Debugf("building minirootfs %s", bc.TarballPath())
-	layerTarGZ, _, err := bc.BuildLayer(ctx)
+	_, layer, err := bc.BuildLayer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to build layer image: %w", err)
 	}
-	log.Debugf("wrote minirootfs to %s", layerTarGZ)
+	log.Debugf("converting layer to cpio %s", dest)
 
-	return nil
+	// Create the CPIO file, and set up a deduplicating writer
+	// to produce the gzip-compressed CPIO archive.
+	f, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// TODO(mattmoor): Consider wrapping in a gzip writer if the filename
+	// ends in .gz
+
+	return cpio.FromLayer(layer, f)
 }
